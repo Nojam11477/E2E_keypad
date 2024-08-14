@@ -15,7 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ''  // 빈칸
     ];
 
-    // 이미지 배열을 셔플하는 함수
     function shuffle(array) {
         for (let i = array.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -23,53 +22,130 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 이미지 배열 셔플
     shuffle(images);
 
-    const canvas = document.getElementById('combined-image');
-    const ctx = canvas.getContext('2d');
-    const imageSize = 150; // 각 이미지의 크기 (150x150 픽셀)
+    const imageSize = 150;
+    const imagesPerRow = 3;
+    const rows = 4;
+
+    const imageCanvas = document.getElementById('image-canvas');
+    const circleCanvas = document.getElementById('circle-canvas');
+
+    const imageCtx = imageCanvas.getContext('2d');
+    const circleCtx = circleCanvas.getContext('2d');
+
+    if (!imageCanvas || !imageCtx || !circleCanvas || !circleCtx) {
+        console.error('Failed to initialize canvas or context');
+        return;
+    }
+
+    const circleRadius = 30;
+    const circleSpacing = 20;
+    const circles = [];
+    let filledCircles = 0;
 
     let imagesLoaded = 0;
+    const clickedIndices = [];
+
+    // Create an off-screen canvas to combine images
+    const offscreenCanvas = document.createElement('canvas');
+    offscreenCanvas.width = imagesPerRow * imageSize;
+    offscreenCanvas.height = rows * imageSize;
+    const offscreenCtx = offscreenCanvas.getContext('2d');
+
     images.forEach((image, index) => {
         if (image === '') {
             imagesLoaded++;
             if (imagesLoaded === images.length) {
-                processImage();
+                finalizeAndDrawImage();
             }
-            return; // 빈칸은 건너뜀
+            return;
         }
 
         const img = new Image();
         img.src = `${imageDirPath}/${image}`;
         img.onload = () => {
-            const x = (index % 3) * imageSize;
-            const y = Math.floor(index / 3) * imageSize;
-            ctx.drawImage(img, x, y, imageSize, imageSize);
+            const x = (index % imagesPerRow) * imageSize;
+            const y = Math.floor(index / imagesPerRow) * imageSize;
+            offscreenCtx.drawImage(img, x, y, imageSize, imageSize);
             imagesLoaded++;
             if (imagesLoaded === images.length) {
-                processImage();
+                finalizeAndDrawImage();
+            }
+        };
+        img.onerror = () => {
+            console.error(`Failed to load image: ${image}`);
+            imagesLoaded++;
+            if (imagesLoaded === images.length) {
+                finalizeAndDrawImage();
             }
         };
     });
 
-    function processImage() {
-        // Canvas를 base64로 인코딩
-        const dataURL = canvas.toDataURL('image/png');
+    function finalizeAndDrawImage() {
+        // Draw the combined image onto the main canvas
+        imageCtx.drawImage(offscreenCanvas, 0, 0);
+        drawCircles();
+    }
 
-        // base64 문자열에서 해시값 계산
-        sha256(dataURL).then(hash => {
-            console.log('Base64 Encoded Image:', dataURL);
-            console.log('SHA-256 Hash:', hash);
+    function drawCircles() {
+        const totalCircleWidth = circleRadius * 2 * 6 + circleSpacing * 5;
+        const startX = (circleCanvas.width - totalCircleWidth) / 2 + circleRadius;
+        const y = circleCanvas.height / 2;
+
+        for (let i = 0; i < 6; i++) {
+            const x = startX + i * (circleRadius * 2 + circleSpacing);
+            circles.push({ x, y });
+            circleCtx.beginPath();
+            circleCtx.arc(x, y, circleRadius, 0, Math.PI * 2);
+            circleCtx.lineWidth = 5;
+            circleCtx.strokeStyle = 'blue';
+            circleCtx.stroke();
+        }
+    }
+
+    function fillCircle(index) {
+        if (index >= 0 && index < circles.length) {
+            const { x, y } = circles[index];
+            circleCtx.beginPath();
+            circleCtx.arc(x, y, circleRadius, 0, Math.PI * 2);
+            circleCtx.fillStyle = 'blue';
+            circleCtx.fill();
+            circleCtx.lineWidth = 5;
+            circleCtx.strokeStyle = 'blue';
+            circleCtx.stroke();
+        }
+    }
+
+    function sha256(message) {
+        const msgBuffer = new TextEncoder().encode(message);
+        return crypto.subtle.digest('SHA-256', msgBuffer).then(hashBuffer => {
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         });
     }
 
-    // SHA-256 해시 계산 함수
-    async function sha256(message) {
-        const msgBuffer = new TextEncoder().encode(message);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        return hashHex;
-    }
+    imageCanvas.addEventListener('click', async (event) => {
+        const rect = imageCanvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+
+        const col = Math.floor(x / imageSize);
+        const row = Math.floor(y / imageSize);
+        const clickedIndex = row * imagesPerRow + col;
+
+        if (images[clickedIndex] !== '' && filledCircles < 6) {
+            clickedIndices.push(clickedIndex);
+            fillCircle(filledCircles);
+            filledCircles++;
+
+            if (filledCircles === 6) {
+                const hashes = await Promise.all(clickedIndices.map(index => sha256(index.toString())));
+                alert(hashes.join('\n'));
+                setTimeout(() => {
+                    location.reload();
+                }, 500);
+            }
+        }
+    });
 });

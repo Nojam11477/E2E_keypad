@@ -7,18 +7,21 @@
     <style>
         body {
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
+            justify-content: center;
             height: 100vh;
             margin: 0;
         }
-        #combined-image {
+        canvas {
             border: 1px solid #000;
+            margin-bottom: 20px;
         }
     </style>
 </head>
 <body>
-<canvas id="combined-image" width="450" height="600"></canvas>
+<canvas id="circle-canvas" width="500" height="100"></canvas>
+<canvas id="image-canvas" width="450" height="600"></canvas>
 <script src="script.js"></script>
 </body>
 </html>
